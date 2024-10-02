@@ -8,6 +8,7 @@ import jakarta.persistence.EntityManager;
 import ca.uhn.fhir.jpa.dao.tx.IHapiTransactionService;
 import ca.uhn.fhir.rest.api.server.RequestDetails;
 import ch.ahdis.fhir.hapi.jpa.validation.ImplementationGuideProviderR4;
+import ch.ahdis.fhir.hapi.jpa.validation.ImplementationGuideProviderR4B;
 import ch.ahdis.fhir.hapi.jpa.validation.ImplementationGuideProviderR5;
 import ch.ahdis.matchbox.config.MatchboxFhirContextProperties;
 import ch.ahdis.matchbox.interceptor.HttpReadOnlyInterceptor;
@@ -28,8 +29,10 @@ import org.springframework.core.env.Environment;
 
 import ca.uhn.fhir.batch2.model.StatusEnum;
 import ca.uhn.fhir.batch2.api.IJobCoordinator;
+import ca.uhn.fhir.batch2.api.IJobPartitionProvider;
 import ca.uhn.fhir.batch2.api.IJobPersistence;
 import ca.uhn.fhir.batch2.api.JobOperationResultJson;
+import ca.uhn.fhir.batch2.coordinator.DefaultJobPartitionProvider;
 import ca.uhn.fhir.batch2.jobs.parameters.UrlPartitioner;
 import ca.uhn.fhir.batch2.model.JobInstance;
 import ca.uhn.fhir.batch2.model.JobInstanceStartRequest;
@@ -47,15 +50,18 @@ import ca.uhn.fhir.jpa.binary.provider.BinaryAccessProvider;
 import ca.uhn.fhir.jpa.bulk.export.api.IBulkExportProcessor;
 import ca.uhn.fhir.jpa.config.util.ValidationSupportConfigUtil;
 import ca.uhn.fhir.jpa.dao.data.IBatch2JobInstanceRepository;
+import ca.uhn.fhir.jpa.dao.data.IBatch2WorkChunkMetadataViewRepository;
 import ca.uhn.fhir.jpa.dao.data.IBatch2WorkChunkRepository;
 import ca.uhn.fhir.jpa.dao.mdm.MdmExpansionCacheSvc;
 import ca.uhn.fhir.jpa.delete.ThreadSafeResourceDeleterSvc;
 import ca.uhn.fhir.jpa.model.sched.ISchedulerService;
 import ca.uhn.fhir.jpa.packages.IHapiPackageCacheManager;
 import ca.uhn.fhir.jpa.packages.IPackageInstallerSvc;
+import ca.uhn.fhir.jpa.partition.IRequestPartitionHelperSvc;
 import ca.uhn.fhir.jpa.partition.PartitionManagementProvider;
 import ca.uhn.fhir.jpa.provider.IJpaSystemProvider;
 import ca.uhn.fhir.jpa.search.DatabaseBackedPagingProvider;
+import ca.uhn.fhir.jpa.searchparam.MatchUrlService;
 import ca.uhn.fhir.jpa.starter.AppProperties;
 import ca.uhn.fhir.jpa.starter.common.StarterJpaConfig;
 import ca.uhn.fhir.jpa.validation.JpaValidationSupportChain;
@@ -70,10 +76,11 @@ import ca.uhn.fhir.rest.server.util.ISearchParamRegistry;
 import ch.ahdis.fhir.hapi.jpa.validation.ValidationProvider;
 import ch.ahdis.matchbox.interceptor.ImplementationGuidePackageInterceptor;
 import ch.ahdis.matchbox.interceptor.MappingLanguageInterceptor;
-import ch.ahdis.matchbox.mappinglanguage.StructureMapTransformProviderR4;
-import ch.ahdis.matchbox.mappinglanguage.StructureMapTransformProviderR5;
+import ch.ahdis.matchbox.mappinglanguage.StructureMapTransformProvider;
 import ch.ahdis.matchbox.questionnaire.QuestionnaireAssembleProviderR4;
+import ch.ahdis.matchbox.questionnaire.QuestionnaireAssembleProviderR4B;
 import ch.ahdis.matchbox.questionnaire.QuestionnaireResponseExtractProviderR4;
+import ch.ahdis.matchbox.questionnaire.QuestionnaireResponseExtractProviderR4B;
 import ch.ahdis.matchbox.questionnaire.QuestionnaireResponseExtractProviderR5;
 
 import org.springframework.data.domain.Page;
@@ -96,6 +103,9 @@ public class MatchboxJpaConfig extends StarterJpaConfig {
 	QuestionnaireAssembleProviderR4 assembleProviderR4;
 
 	@Autowired(required = false)
+	QuestionnaireAssembleProviderR4B assembleProviderR4B;
+
+	@Autowired(required = false)
 	QuestionnaireAssembleProviderR5 assembleProviderR5;
 
 	@Autowired
@@ -103,6 +113,9 @@ public class MatchboxJpaConfig extends StarterJpaConfig {
 
 	@Autowired(required = false)
 	QuestionnaireResponseExtractProviderR4 questionnaireResponseProviderR4;
+
+	@Autowired(required = false)
+	QuestionnaireResponseExtractProviderR4B questionnaireResponseProviderR4B;
 
 	@Autowired(required = false)
 	QuestionnaireResponseExtractProviderR5 questionnaireResponseProviderR5;
@@ -135,16 +148,16 @@ public class MatchboxJpaConfig extends StarterJpaConfig {
 	protected StructureDefinitionResourceProvider structureDefinitionProvider;
 
 	@Autowired(required = false)
-	protected StructureMapTransformProviderR4 structureMapTransformProviderR4;
-
-	@Autowired(required = false)
-	protected StructureMapTransformProviderR5 structureMapTransformProviderR5;
+	protected StructureMapTransformProvider structureMapTransformProvider;
 
 	@Autowired
 	private ApplicationContext context;
 
 	@Autowired(required = false)
 	private ImplementationGuideProviderR4 implementationGuideResourceProviderR4;
+
+	@Autowired(required = false)
+	private ImplementationGuideProviderR4B implementationGuideResourceProviderR4B;
 
 	@Autowired(required = false)
 	private ImplementationGuideProviderR5 implementationGuideResourceProviderR5;
@@ -187,12 +200,11 @@ public class MatchboxJpaConfig extends StarterJpaConfig {
 		fhirServer.registerProviders(validationProvider, questionnaireProvider,
 											  conceptMapProvider, codeSystemProvider, valueSetProvider, structureDefinitionProvider,
 											codeSystemCodeValidationProvider,
-											  valueSetCodeValidationProvider);
-
+											  valueSetCodeValidationProvider, this.structureMapTransformProvider);
+									  
 		switch (this.myFhirContext.getVersion().getVersion()) {
 			case R4 -> {
-				fhirServer.registerProviders(this.implementationGuideResourceProviderR4, this.assembleProviderR4,
-													  this.questionnaireResponseProviderR4, this.structureMapTransformProviderR4);
+				fhirServer.registerProviders(this.implementationGuideResourceProviderR4, this.assembleProviderR4, this.questionnaireResponseProviderR4);
 
 				if (appProperties.getOnly_install_packages() != null && appProperties.getOnly_install_packages()
 					&& appProperties.getImplementationGuides() != null) {
@@ -201,8 +213,18 @@ public class MatchboxJpaConfig extends StarterJpaConfig {
 					System.exit(exitCode);
 				}
 			}
+			case R4B -> {
+				fhirServer.registerProviders(this.implementationGuideResourceProviderR4B, this.assembleProviderR4B, this.questionnaireResponseProviderR4B);
+
+				if (appProperties.getOnly_install_packages() != null && appProperties.getOnly_install_packages()
+					&& appProperties.getImplementationGuides() != null) {
+					this.implementationGuideResourceProviderR4B.loadAll(true);
+					int exitCode = SpringApplication.exit(this.context, ()->0);
+					System.exit(exitCode);
+				}
+			}
 			case R5 -> {
-				fhirServer.registerProviders(this.implementationGuideResourceProviderR5, this.assembleProviderR5, this.questionnaireResponseProviderR5, this.structureMapTransformProviderR5);
+				fhirServer.registerProviders(this.implementationGuideResourceProviderR5, this.assembleProviderR5, this.questionnaireResponseProviderR5);
 
 				if (appProperties.getOnly_install_packages() != null && appProperties.getOnly_install_packages()
 					&& appProperties.getImplementationGuides() != null) {
@@ -348,13 +370,28 @@ public class MatchboxJpaConfig extends StarterJpaConfig {
 	}
 
 	@Bean
-	public IJobPersistence batch2JobInstancePersister(IBatch2JobInstanceRepository theJobInstanceRepository,
-																	  IBatch2WorkChunkRepository theWorkChunkRepository,
-																	  IHapiTransactionService theTransactionService,
-																	  EntityManager theEntityManager,
-																	  final IInterceptorBroadcaster theInterceptorBroadcaster) {
-		return new JpaJobPersistenceImpl(theJobInstanceRepository, theWorkChunkRepository, theTransactionService,
-													theEntityManager, theInterceptorBroadcaster);
+	public IJobPartitionProvider jobPartitionProvider(
+			FhirContext theFhirContext,
+			IRequestPartitionHelperSvc theRequestPartitionHelperSvc,
+			MatchUrlService theMatchUrlService) {
+		return new DefaultJobPartitionProvider(theFhirContext, theRequestPartitionHelperSvc, theMatchUrlService);
+	}
+
+	@Bean
+	public IJobPersistence batch2JobInstancePersister(
+			IBatch2JobInstanceRepository theJobInstanceRepository,
+			IBatch2WorkChunkRepository theWorkChunkRepository,
+			IBatch2WorkChunkMetadataViewRepository theWorkChunkMetadataViewRepo,
+			IHapiTransactionService theTransactionService,
+			EntityManager theEntityManager,
+			IInterceptorBroadcaster theInterceptorBroadcaster) {
+		return new JpaJobPersistenceImpl(
+				theJobInstanceRepository,
+				theWorkChunkRepository,
+				theWorkChunkMetadataViewRepo,
+				theTransactionService,
+				theEntityManager,
+				theInterceptorBroadcaster);
 	}
 
 

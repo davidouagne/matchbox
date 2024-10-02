@@ -25,5 +25,14 @@ jobs:
         timeout-minutes: 15
         # We need a timeout here
         env:
-          MAVEN_OPTS: -Xmx2g
+          MAVEN_OPTS: -Xmx12g
         run: mvn --batch-mode --no-transfer-progress --update-snapshots verify
+    
+      - uses: actions/upload-artifact@v4
+        if: failure() 
+        with:
+          name: testresults
+          path: |
+            ./matchbox-server/target/surefire-reports
+            ./matchbox-engine/target/surefire-reports
+          retention-days: 2

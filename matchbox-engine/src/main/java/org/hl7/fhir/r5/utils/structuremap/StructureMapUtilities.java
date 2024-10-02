@@ -1081,13 +1081,15 @@ public class StructureMapUtilities {
     if (lexer.hasToken("check")) {
       lexer.take();
       ExpressionNode node = fpe.parse(lexer);
+      // matchbox patch https://github.com/hapifhir/org.hl7.fhir.core/issues/1748
       source.setUserData(MAP_WHERE_CHECK, node);
       source.setCheck(node.toString());
     }
     if (lexer.hasToken("log")) {
       lexer.take();
       ExpressionNode node = fpe.parse(lexer);
-      source.setUserData(MAP_WHERE_CHECK, node);
+      // matchbox patch https://github.com/hapifhir/org.hl7.fhir.core/issues/1748
+      // source.setUserData(MAP_WHERE_LOG, node);
       source.setLogMessage(node.toString());
     }
   }
@@ -1329,11 +1331,13 @@ public class StructureMapUtilities {
           for (StructureMapGroupRuleComponent childrule : rule.getRule()) {
             executeRule(indent + "  ", context, map, v, group, childrule, false);
           }
-        } else if (rule.hasDependent()) {
+        // matchbox patch #265 for simple rules
+        } else if (rule.hasDependent() && !checkisSimple(rule)) {
           for (StructureMapGroupRuleDependentComponent dependent : rule.getDependent()) {
             executeDependency(indent + "  ", context, map, v, group, dependent);
           }
-        } else if (rule.getSource().size() == 1 && rule.getSourceFirstRep().hasVariable() && rule.getTarget().size() == 1 && rule.getTargetFirstRep().hasVariable() && rule.getTargetFirstRep().getTransform() == StructureMapTransform.CREATE && !rule.getTargetFirstRep().hasParameter()) {
+        // matchbox patch #265 for simple rules
+        } else if (checkisSimple(rule) || (rule.getSource().size() == 1 && rule.getSourceFirstRep().hasVariable() && rule.getTarget().size() == 1 && rule.getTargetFirstRep().hasVariable() && rule.getTargetFirstRep().getTransform() == StructureMapTransform.CREATE && !rule.getTargetFirstRep().hasParameter())) {
           // simple inferred, map by type
           if (debug) {
             log(v.summary());
@@ -1639,17 +1643,21 @@ public class StructureMapUtilities {
       }
       items.removeAll(remove);
     }
-
+    
     if (src.hasCondition()) {
       ExpressionNode expr = (ExpressionNode) src.getUserData(MAP_WHERE_EXPRESSION);
       if (expr == null) {
         expr = fpe.parse(src.getCondition());
-        //        fpe.check(context.appInfo, ??, ??, expr)
         src.setUserData(MAP_WHERE_EXPRESSION, expr);
       }
       List<Base> remove = new ArrayList<Base>();
       for (Base item : items) {
-        if (!fpe.evaluateToBoolean(vars, null, null, item, expr)) {
+        // matchbox patch https://github.com/hapifhir/org.hl7.fhir.core/issues/1748
+        Variables varsForSource = vars.copy();
+        if (src.hasVariable()) {
+            varsForSource.add(VariableMode.INPUT, src.getVariable(), item);
+        }
+        if (!fpe.evaluateToBoolean(varsForSource, null, null, item, expr)) {
           log(indent + "  condition [" + src.getCondition() + "] for " + item.toString() + " : false");
           remove.add(item);
         } else
@@ -1662,12 +1670,15 @@ public class StructureMapUtilities {
       ExpressionNode expr = (ExpressionNode) src.getUserData(MAP_WHERE_CHECK);
       if (expr == null) {
         expr = fpe.parse(src.getCheck());
-        //        fpe.check(context.appInfo, ??, ??, expr)
         src.setUserData(MAP_WHERE_CHECK, expr);
       }
-      List<Base> remove = new ArrayList<Base>();
+      // matchbox patch https://github.com/hapifhir/org.hl7.fhir.core/issues/1748
       for (Base item : items) {
-        if (!fpe.evaluateToBoolean(vars, null, null, item, expr))
+        Variables varsForSource = vars.copy();
+        if (src.hasVariable()) {
+            varsForSource.add(VariableMode.INPUT, src.getVariable(), item);
+        }
+        if (!fpe.evaluateToBoolean(varsForSource, null, null, item, expr))
           throw new FHIRException("Rule \"" + ruleId + "\": Check condition failed");
       }
     }
@@ -1676,16 +1687,21 @@ public class StructureMapUtilities {
       ExpressionNode expr = (ExpressionNode) src.getUserData(MAP_WHERE_LOG);
       if (expr == null) {
         expr = fpe.parse(src.getLogMessage());
-        //        fpe.check(context.appInfo, ??, ??, expr)
         src.setUserData(MAP_WHERE_LOG, expr);
       }
       CommaSeparatedStringBuilder b = new CommaSeparatedStringBuilder();
-      for (Base item : items)
-        b.appendIfNotNull(fpe.evaluateToString(vars, null, null, item, expr));
+      // matchbox patch https://github.com/hapifhir/org.hl7.fhir.core/issues/1748
+      for (Base item : items) {
+        Variables varsForSource = vars.copy();
+        if (src.hasVariable()) {
+            varsForSource.add(VariableMode.INPUT, src.getVariable(), item);
+        }
+        b.appendIfNotNull(fpe.evaluateToString(varsForSource, null, null, item, expr));
+      }
       if (b.length() > 0)
         services.log(b.toString());
     }
-
+    
 
     if (src.hasListMode() && !items.isEmpty()) {
       switch (src.getListMode()) {
@@ -1763,7 +1779,7 @@ public class StructureMapUtilities {
     if (tgt.hasVariable() && v != null)
       vars.add(VariableMode.OUTPUT, tgt.getVariable(), v);
   }
-
+  
   private Base runTransform(String rulePath, TransformContext context, StructureMap map, StructureMapGroupComponent group, StructureMapGroupRuleTargetComponent tgt, Variables vars, Base dest, String element, String srcVar, boolean root) throws FHIRException {
     try {
       switch (tgt.getTransform()) {
@@ -2530,7 +2546,7 @@ public class StructureMapUtilities {
         ExpressionNode expr = (ExpressionNode) tgt.getUserData(MAP_EXPRESSION);
         if (expr == null) {
           expr = fpe.parse(getParamString(vars, tgt.getParameter().get(tgt.getParameter().size() - 1)));
-          tgt.setUserData(MAP_WHERE_EXPRESSION, expr);
+          // matchbox patch https://github.com/hapifhir/org.hl7.fhir.core/issues/1748
         }
         return fpe.check(vars, null, expr);
       case TRANSLATE:

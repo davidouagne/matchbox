@@ -35,6 +35,7 @@ import org.apache.commons.beanutils.BeanUtils;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.hl7.fhir.convertors.factory.VersionConvertorFactory_40_50;
+import org.hl7.fhir.convertors.factory.VersionConvertorFactory_43_50;
 import org.hl7.fhir.instance.model.api.IBase;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.r4.model.StructureDefinition;
@@ -270,16 +271,20 @@ public class ValidationProvider {
 
 			// Add slice info to diagnostics
 			if (message.sliceText != null) {
-				final var newDiagnostics = new StringBuilder();
-				newDiagnostics.append(issue.getDiagnostics());
-				newDiagnostics.append(" Slice info:");
-				for (int i = 0; i < message.sliceText.length; ++i) {
-					newDiagnostics.append(" ");
-					newDiagnostics.append(i + 1);
-					newDiagnostics.append(".) ");
-					newDiagnostics.append(message.sliceText[i]);
+				List<String> sliceInfo = engine.filterSlicingMessages(message.sliceText);
+				if (!sliceInfo.isEmpty()) {
+					final var newDiagnostics = new StringBuilder();
+					newDiagnostics.append(issue.getDiagnostics());
+					newDiagnostics.append(" Slice info:");
+
+					for (int i = 0; i < sliceInfo.size(); ++i) {
+						newDiagnostics.append(" ");
+						newDiagnostics.append(i + 1);
+						newDiagnostics.append(".) ");
+						newDiagnostics.append(sliceInfo.get(i));
+					}
+					issue.setDiagnostics(newDiagnostics.toString());
 				}
-				issue.setDiagnostics(newDiagnostics.toString());
 			}
 
 			oo.addIssue(issue);
@@ -295,6 +300,7 @@ public class ValidationProvider {
 
 		return switch (this.myContext.getVersion().getVersion()) {
 			case R4 -> VersionConvertorFactory_40_50.convertResource(oo);
+			case R4B -> VersionConvertorFactory_43_50.convertResource(oo);
 			case R5 -> oo;
 			default -> throw new MatchboxUnsupportedFhirVersionException("ValidationProvider",
 																							 this.myContext.getVersion().getVersion());

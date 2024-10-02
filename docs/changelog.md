@@ -1,3 +1,29 @@
+Unreleased
+
+- Gazelle reports: add an information message if there are no other messages [#274](https://github.com/ahdis/matchbox/issues/274)
+
+2024/09/16 Release 3.9.2
+
+- Fix security issues [#279](https://github.com/ahdis/matchbox/issues/279)
+- where clause on alias [#278](https://github.com/ahdis/matchbox/issues/278)
+
+2024/09/16 Release 3.9.1
+
+- Make CORS configurable, default not activated make cors configurable (now activated) [#271](https://github.com/ahdis/matchbox/issues/271)
+- server API FML transforms between different FHIR versions (R4, R4B, R5) [#265](https://github.com/ahdis/matchbox/issues/265), set flag xVersion
+- show a notification on errors in the validation GUI [#272](https://github.com/ahdis/matchbox/issues/272)
+- ignore info/warnings also in slicing info [#273](https://github.com/ahdis/matchbox/issues/273)
+- Gazelle validation reports with no issues should pass [#274](https://github.com/ahdis/matchbox/issues/274)
+- update frontend dependencies
+- provide version-less Gazelle profiles for current packages [#276](https://github.com/ahdis/matchbox/issues/276)
+
+2024/09/10 Release 3.9.0
+
+- initial support for FML transforms between different FHIR versions (R4, R4B, R5) [#265](https://github.com/ahdis/matchbox/issues/265), set flag xVersion
+- support for FHIR R4B in engine and server [#65](https://github.com/ahdis/matchbox/issues/65)
+- upgrade to hapi-fhir 7.4.0 and org.hl7.fhir.core 6.3.24 [#267](https://github.com/ahdis/matchbox/issues/267)
+- Ignore info/warnings also in slicing info [#269](https://github.com/ahdis/matchbox/issues/269)
+
 2024/08/13 Release 3.8.10
 
 - upgrade graphql to fix [CVE-2024-40094](https://github.com/ahdis/matchbox/security/code-scanning/83)

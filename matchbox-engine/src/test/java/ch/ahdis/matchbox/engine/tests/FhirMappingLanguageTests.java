@@ -31,6 +31,7 @@ import org.apache.commons.io.IOUtils;
 import org.hl7.fhir.exceptions.FHIRException;
 import org.hl7.fhir.r4.formats.XmlParser;
 import org.hl7.fhir.r4.model.Bundle;
+import org.hl7.fhir.r4.model.CapabilityStatement;
 import org.hl7.fhir.r4.model.ExplanationOfBenefit;
 import org.hl7.fhir.r4.model.Observation;
 import org.hl7.fhir.r4.model.Patient;
@@ -38,7 +39,7 @@ import org.hl7.fhir.r4.model.Questionnaire;
 import org.hl7.fhir.r4.model.Resource;
 import org.hl7.fhir.r4.model.StructureDefinition;
 import org.hl7.fhir.r4.model.StructureMap;
-import org.hl7.fhir.r4.model.Enumerations.FHIRVersion;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -57,6 +58,13 @@ class FhirMappingLanguageTests {
 	static void setUpBeforeClass() throws Exception {
 		engine = new MatchboxEngineBuilder().getEngineR4();
 	}
+	
+	@AfterAll
+	static void teardownClass() throws Exception {
+		engine = null;
+		CompareUtil.logMemory();
+	}
+
 
 	@BeforeEach
 	void setUp() throws Exception {
@@ -98,6 +106,20 @@ class FhirMappingLanguageTests {
 		assertEquals("Patient", res.getResourceType().name());
 		Patient patient = (Patient) res;
 		assertEquals("MALE", patient.getGender().name());
+	}
+
+	@Test
+	void testNarrative() throws FHIRException, IOException {
+		MatchboxEngine engine = new MatchboxEngine(FhirMappingLanguageTests.engine);
+		StructureMap sm = engine.parseMap(getFileAsStringFromResources("/narrative.map"));
+		assertTrue(sm != null);
+		engine.addCanonicalResource(sm);
+		Resource res = engine.transformToFhir(getFileAsStringFromResources("/pat.json"), true,
+				"http://ahdis.ch/matchbox/fml/narrative");
+		assertTrue(res != null);
+		assertEquals("Patient", res.getResourceType().name());
+		Patient patient = (Patient) res;
+		assertEquals("<div xmlns=\"http://www.w3.org/1999/xhtml\">text</div>", patient.getText().getDivAsString());
 	}
 
 	@Test
@@ -230,6 +252,18 @@ class FhirMappingLanguageTests {
 	}
 
 	@Test
+	void testWhereClause() throws FHIRException, IOException {
+		MatchboxEngine engine = new MatchboxEngine(FhirMappingLanguageTests.engine);
+		StructureMap sm = engine.parseMap(getFileAsStringFromResources("/whereclause.map"));
+		assertTrue(sm != null);
+		engine.addCanonicalResource(sm);
+		CapabilityStatement result = (CapabilityStatement) engine.transformToFhir(getFileAsStringFromResources("/capabilitystatement-example.json"), true,
+				"http://ahdis.ch/matchbox/fml/whereclause");
+		assertTrue(result != null);
+		assertEquals(5,result.getRest().get(0).getResource().get(0).getInteraction().size());
+	}
+
+	@Test
   void testDateManipulation() throws FHIRException, IOException {
     MatchboxEngine engine = new MatchboxEngine(FhirMappingLanguageTests.engine);
     StructureMap sm = engine.parseMap(getFileAsStringFromResources("/qr2patfordates.map"));
@@ -243,7 +277,7 @@ class FhirMappingLanguageTests {
     assertEquals("2023-10-26", patient.getBirthDateElement().getValueAsString());
     assertEquals("2023-09-20T13:19:13.502Z", patient.getDeceasedDateTimeType().getValueAsString());
   }
-	
+  	
 	
 
 	@Test

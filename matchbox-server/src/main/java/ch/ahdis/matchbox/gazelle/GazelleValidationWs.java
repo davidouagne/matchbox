@@ -1,5 +1,6 @@
 package ch.ahdis.matchbox.gazelle;
 
+import ca.uhn.fhir.jpa.model.entity.NpmPackageVersionResourceEntity;
 import ca.uhn.fhir.rest.api.EncodingEnum;
 import ca.uhn.fhir.util.StopWatch;
 import ch.ahdis.fhir.hapi.jpa.validation.ValidationProvider;
@@ -96,17 +97,32 @@ public class GazelleValidationWs {
 	@GetMapping(path = PROFILES_PATH, produces = MediaType.APPLICATION_JSON_VALUE)
 	public List<ValidationProfile> getProfiles() {
 		// Filter the extensions, because they won't be validated directly
-		return this.structureDefinitionProvider.getPackageResources().stream()
+		final List<NpmPackageVersionResourceEntity> entities =
+			this.structureDefinitionProvider.getPackageResources().stream()
 			.filter(packageVersionResource -> !packageVersionResource.getFilename().startsWith(SD_EXTENSION_TITLE_PREFIX))
-			.map(packageVersionResource -> {
+			.toList();
+
+		final var profiles = new ArrayList<ValidationProfile>(entities.size()*2);
+		entities.forEach(packageVersionResource -> {
 				final var profile = new ValidationProfile();
 				final var version = packageVersionResource.getCanonicalVersion();
 				profile.setProfileID("%s|%s".formatted(packageVersionResource.getCanonicalUrl(), version));
 				// PATCHed: filename contains the StructureDefinition title.
 				profile.setProfileName("%s (%s)".formatted(packageVersionResource.getFilename(), version));
 				profile.setDomain(packageVersionResource.getPackageVersion().getPackageId());
-				return profile;
-			}).toList();
+				profiles.add(profile);
+
+				// If the package is current, we also add it version-less
+				if (packageVersionResource.getPackageVersion().isCurrentVersion()) {
+					final var profile2 = new ValidationProfile();
+					profile2.setProfileID(packageVersionResource.getCanonicalUrl());
+					// PATCHed: filename contains the StructureDefinition title.
+					profile2.setProfileName(packageVersionResource.getFilename());
+					profile2.setDomain(packageVersionResource.getPackageVersion().getPackageId());
+					profiles.add(profile2);
+				}
+			});
+		return profiles;
 	}
 
 	/**
@@ -231,8 +247,8 @@ public class GazelleValidationWs {
 	 * Performs the validation of the given item with the given engine.
 	 */
 	ValidationSubReport validateItem(final MatchboxEngine engine,
-									 final ValidationItem item,
-									 final String profile) {
+									         final ValidationItem item,
+												final String profile) {
 		final String content = new String(item.getContent(), StandardCharsets.UTF_8);
 		final var encoding = EncodingEnum.detectEncoding(content);
 
@@ -240,10 +256,24 @@ public class GazelleValidationWs {
 		subReport.setName("Validation of item #%s".formatted(item.getItemId()));
 		try {
 			final var messages = ValidationProvider.doValidate(engine, content, encoding, profile);
-			messages.stream().map(this::convertMessageToReport).forEach(subReport::addAssertionReport);
+			messages.stream()
+				.map(message -> this.convertMessageToReport(message, engine))
+				.forEach(subReport::addAssertionReport);
 		} catch (final Exception e) {
 			log.error("Error during validation", e);
 			subReport.addUnexpectedError(new UnexpectedError().setMessage("Error during validation: %s".formatted(e.getMessage())));
+		}
+
+		// The EVSClient expects at lest one assertion report, otherwise it will show it as DONE_UNDEFINED
+		// https://github.com/ahdis/matchbox/issues/274
+		if (subReport.getAssertionReports() == null || subReport.getAssertionReports().isEmpty()) {
+			subReport.addAssertionReport(
+				new AssertionReport()
+					.setResult(ValidationTestResult.PASSED)
+					.setSeverity(SeverityLevel.INFO)
+					.setPriority(RequirementPriority.MANDATORY)
+					.setDescription("No fatal or error issues detected, the validation has passed")
+			);
 		}
 
 		return subReport;
@@ -252,7 +282,8 @@ public class GazelleValidationWs {
 	/**
 	 * Converts a validation message (HAPI) to an assertion report (Gazelle).
 	 */
-	AssertionReport convertMessageToReport(final ValidationMessage message) {
+	AssertionReport convertMessageToReport(final ValidationMessage message,
+														final MatchboxEngine engine) {
 		final var assertionReport = new AssertionReport();
 		switch (message.getLevel()) {
 			case FATAL, ERROR:
@@ -293,11 +324,14 @@ public class GazelleValidationWs {
 		var description = new StringBuilder();
 		description.append(message.getMessage());
 		if (message.sliceText != null && message.sliceText.length > 0) {
-			description.append("<br/><br/>Slice information:<br/><ul>");
-			for (final var slice : message.sliceText) {
-				description.append("<li>").append(slice).append("</li>");
+			final var slices = engine.filterSlicingMessages(message.sliceText);
+			if (!slices.isEmpty()) {
+				description.append("<br/><br/>Slice information:<br/><ul>");
+				for (final var slice : slices) {
+					description.append("<li>").append(slice).append("</li>");
+				}
+				description.append("</ul>");
 			}
-			description.append("</ul>");
 		}
 		assertionReport.setDescription(description.toString());
 		return assertionReport;
