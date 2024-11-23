@@ -9,7 +9,7 @@
 
     <groupId>health.matchbox</groupId>
     <artifactId>matchbox</artifactId>
-    <version>3.9.3</version>
+    <version>3.9.7</version>
     <packaging>pom</packaging>
     <name>matchbox</name>
     <description>An open-source implementation to support testing and implementation of FHIR based solutions and map or
@@ -38,7 +38,7 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-        <fhir.core.version>6.3.24</fhir.core.version>
+        <fhir.core.version>6.4.1</fhir.core.version>
         <hapi.fhir.version>7.4.0</hapi.fhir.version>
         <!-- Dependency Versions -->
         <validator_test_case_version>1.5.5</validator_test_case_version>
@@ -50,7 +50,7 @@
         <commons_compress_version>1.26.0</commons_compress_version>
         <commons_dbcp2_version>2.11.0</commons_dbcp2_version>
         <commons_text_version>1.10.0</commons_text_version>
-        <commons_io_version>2.11.0</commons_io_version>
+        <commons_io_version>2.14.0</commons_io_version>
         <commons_lang3_version>3.14.0</commons_lang3_version>
         <com_jamesmurty_utils_version>1.2</com_jamesmurty_utils_version>
         <cql_version>1.5.0</cql_version>
@@ -73,7 +73,7 @@
         <hibernate_version>6.4.1.Final</hibernate_version>
         <hibernate_search_version>7.0.0.Final</hibernate_search_version>
         <!-- Update lucene version when you update hibernate-search version -->
-        <lucene_version>9.8.0</lucene_version>
+        <lucene_version>9.12.0</lucene_version>
         <hamcrest_version>2.2</hamcrest_version>
         <hibernate_validator_version>8.0.0.Final</hibernate_validator_version>
         <httpcore_version>4.4.13</httpcore_version>
@@ -150,9 +150,20 @@
                 <version>3.25.5</version>
             </dependency>
             <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons_io_version}</version>
+            </dependency>
+            <dependency>
                 <groupId>ca.uhn.hapi.fhir</groupId>
                 <artifactId>org.hl7.fhir.r4</artifactId>
                 <version>${fhir.core.version}</version>
+                <exclusions>
+                    <exclusion>
+                        <groupId>commons-io</groupId>
+                        <artifactId>commons-io</artifactId>
+                    </exclusion>
+                </exclusions>    
             </dependency>
             <dependency>
                 <groupId>ca.uhn.hapi.fhir</groupId>
@@ -163,6 +174,11 @@
                 <groupId>ca.uhn.hapi.fhir</groupId>
                 <artifactId>org.hl7.fhir.convertors</artifactId>
                 <version>${fhir.core.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.fhir</groupId>
+                <artifactId>ucum</artifactId>
+                <version>1.0.8</version>
             </dependency>
             <dependency>
                 <groupId>ca.uhn.hapi.fhir</groupId>
@@ -186,6 +202,10 @@
                 <artifactId>hapi-fhir-base</artifactId>
                 <version>${hapi.fhir.version}</version>
                 <exclusions>
+                    <exclusion>
+                        <groupId>commons-io</groupId>
+                        <artifactId>commons-io</artifactId>
+                    </exclusion>
                     <exclusion>
                         <groupId>org.slf4j</groupId>
                         <artifactId>slf4j-api</artifactId>
@@ -216,6 +236,10 @@
                         <artifactId>jena-arq</artifactId>
                     </exclusion>
                     <exclusion>
+                        <groupId>commons-io</groupId>
+                        <artifactId>commons-io</artifactId>
+                    </exclusion>
+                    <exclusion>
                         <groupId>commons-logging</groupId>
                         <artifactId>commons-logging</artifactId>
                     </exclusion>
@@ -227,6 +251,14 @@
                     <exclusion>
                         <groupId>co.elastic.clients</groupId>
                         <artifactId>*</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.hibernate.search</groupId>
+                        <artifactId>hibernate-search-backend-lucene</artifactId>
+                    </exclusion>
+                    <exclusion>
+                        <groupId>org.apache.lucene</groupId>
+                        <artifactId>lucene-analysis-phonetic</artifactId>
                     </exclusion>
                 </exclusions>
             </dependency>
@@ -506,6 +538,13 @@
                 <configuration>
                     <release>21</release>
                     <encoding>${project.build.sourceEncoding}</encoding>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok_version}</version>
+                        </path>
+                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
             <plugin>

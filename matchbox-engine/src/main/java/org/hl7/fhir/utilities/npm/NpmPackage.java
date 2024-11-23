@@ -44,15 +44,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -237,9 +229,11 @@ public class NpmPackage {
     public List<String> listFiles() {
       List<String> res = new ArrayList<>();
       if (folder != null) {
-        for (File f : folder.listFiles()) {
-          if (!f.isDirectory() && !Utilities.existsInList(f.getName(), "package.json", ".index.json", ".index.db", ".oids.json", ".oids.db")) {
-            res.add(f.getName());
+        if (folder.exists()) {
+          for (File f : folder.listFiles()) {
+            if (!f.isDirectory() && !Utilities.existsInList(f.getName(), "package.json", ".index.json", ".index.db", ".oids.json", ".oids.db")) {
+              res.add(f.getName());
+            }
           }
         }
       } else {
@@ -648,7 +642,17 @@ public class NpmPackage {
   }
 
 
-
+  /**
+   * Create a package .index.json file for a package folder.
+   * <p>
+   * See <a href="https://hl7.org/fhir/packages.html#2.1.10.4">the FHIR specification</a> for details on .index.json
+   * format and usage.
+   *
+   * @param desc
+   * @param folder
+   * @throws FileNotFoundException
+   * @throws IOException
+   */
   public void indexFolder(String desc, NpmPackageFolder folder) throws FileNotFoundException, IOException {
     List<String> remove = new ArrayList<>();
     NpmPackageIndexBuilder indexer = new NpmPackageIndexBuilder();
@@ -1469,7 +1473,7 @@ public class NpmPackage {
   }
 
   public static NpmPackage fromUrl(String source) throws IOException {
-    HTTPResult res = ManagedWebAccess.get(source+"?nocache=" + System.currentTimeMillis());
+    HTTPResult res = ManagedWebAccess.get(Arrays.asList("npm-package", "fhir-package"), source+"?nocache=" + System.currentTimeMillis());
     res.checkThrowException();
     return fromPackage(new ByteArrayInputStream(res.getContent()));
   }

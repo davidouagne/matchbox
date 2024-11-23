@@ -145,6 +145,15 @@ public class CliContext {
   @JsonProperty("forPublication")
   private boolean forPublication = false;
 
+  @JsonProperty("showMessageIds")
+  private boolean showMessageIds = false;
+
+  @JsonProperty("showTerminologyRouting")
+  private boolean showTerminologyRouting = false;
+
+  @JsonProperty("clearTxCache")
+  private boolean clearTxCache = false;
+
   @JsonProperty("allowExampleUrls")
   private boolean allowExampleUrls = true;
 
@@ -184,10 +193,22 @@ public class CliContext {
     return this.httpReadOnly;
   }
 
+  private boolean autoInstallMissingIgs = false;
+
+  public boolean isAutoInstallMissingIgs() {
+    return this.autoInstallMissingIgs;
+  }
+
   private boolean xVersion = false;
   
   public boolean getXVersion() {
     return xVersion;
+  }
+
+  private boolean devMode = false;
+
+  public boolean getDevMode() {
+	 return devMode;
   }
 
   @Autowired
@@ -216,8 +237,10 @@ public class CliContext {
     this.igsPreloaded = environment.getProperty("matchbox.fhir.context.igsPreloaded", String[].class);
     this.onlyOneEngine = environment.getProperty("matchbox.fhir.context.onlyOneEngine", Boolean.class, false);
     this.httpReadOnly = environment.getProperty("matchbox.fhir.context.httpReadOnly", Boolean.class, false);
+    this.autoInstallMissingIgs = environment.getProperty("matchbox.fhir.context.autoInstallMissingIgs", Boolean.class, false);
     this.extensions = Arrays.asList(environment.getProperty("matchbox.fhir.context.extensions", String[].class, new String[]{"any"}));
     this.xVersion = environment.getProperty("matchbox.fhir.context.xVersion", Boolean.class, false);
+    this.devMode = environment.getProperty("matchbox.fhir.context.devMode", Boolean.class, false);
   }
 
   public CliContext(CliContext other) {
@@ -236,8 +259,10 @@ public class CliContext {
     this.igsPreloaded = other.igsPreloaded;
     this.onlyOneEngine = other.onlyOneEngine;
     this.httpReadOnly = other.httpReadOnly;
+    this.autoInstallMissingIgs = other.autoInstallMissingIgs;
     this.extensions = other.extensions;
     this.xVersion = other.xVersion;
+	 this.devMode = other.devMode;
   }
 
   @JsonProperty("ig")
@@ -586,6 +611,30 @@ public class CliContext {
     this.forPublication = forPublication;
   }
 
+  public boolean isShowMessageIds() {
+    return showMessageIds;
+  }
+
+  public void setShowMessageIds(boolean showMessageIds) {
+    this.showMessageIds = showMessageIds;
+  }
+
+  public boolean isShowTerminologyRouting() {
+    return showTerminologyRouting;
+  }
+
+  public void setShowTerminologyRouting(boolean showTerminologyRouting) {
+    this.showTerminologyRouting = showTerminologyRouting;
+  }
+
+  public boolean isClearTxCache() {
+    return clearTxCache;
+  }
+
+  public void setClearTxCache(boolean clearTxCache) {
+    this.clearTxCache = clearTxCache;
+  }
+
   public boolean isAllowExampleUrls() {
     return allowExampleUrls;
   }
@@ -635,10 +684,15 @@ public class CliContext {
         && securityChecks == that.securityChecks
         && crumbTrails == that.crumbTrails
         && forPublication == that.forPublication
+        && showMessageIds == that.showMessageIds
+        && showTerminologyRouting == that.showTerminologyRouting
+        && clearTxCache == that.clearTxCache
         && allowExampleUrls == that.allowExampleUrls
         && onlyOneEngine == that.onlyOneEngine
         && xVersion == that.xVersion
         && httpReadOnly == that.httpReadOnly
+        && autoInstallMissingIgs == that.autoInstallMissingIgs
+        && devMode == that.devMode
         && htmlInMarkdownCheck == that.htmlInMarkdownCheck
         && Objects.equals(extensions, that.extensions)
         && Objects.equals(txServer, that.txServer)
@@ -677,7 +731,11 @@ public class CliContext {
         securityChecks,
         crumbTrails,
         forPublication,
+        showMessageIds,
+        showTerminologyRouting,
+        clearTxCache,
         httpReadOnly,
+		  autoInstallMissingIgs,
         allowExampleUrls,
         htmlInMarkdownCheck,
         txServer,
@@ -695,6 +753,7 @@ public class CliContext {
         locations,
         jurisdiction,
         onlyOneEngine,
+        devMode,
         xVersion);
     result = 31 * result + Arrays.hashCode(igsPreloaded);
     return result;
@@ -732,6 +791,9 @@ public class CliContext {
         ", securityChecks=" + securityChecks +
         ", crumbTrails=" + crumbTrails +
         ", forPublication=" + forPublication +
+        ", showMessageIds=" + showMessageIds +
+        ", showTerminologyRouting=" + showTerminologyRouting +
+        ", clearTxCache=" + clearTxCache +
         ", allowExampleUrls=" + allowExampleUrls +
         ", locale='" + locale + '\'' +
         ", locations=" + locations +
@@ -740,6 +802,8 @@ public class CliContext {
         ", onlyOneEngine=" + onlyOneEngine +
         ", xVersion=" + xVersion +
         ", httpReadOnly=" + httpReadOnly +
+        ", autoInstallMissingIgs=" + autoInstallMissingIgs +
+        ", devMode=" + devMode +
         '}';
   }
 
@@ -771,7 +835,11 @@ public class CliContext {
 	addExtension(ext, "securityChecks", new BooleanType(this.securityChecks));
 	addExtension(ext, "crumbTrails", new BooleanType(this.crumbTrails));
 	addExtension(ext, "forPublication", new BooleanType(this.forPublication));
+	addExtension(ext, "showMessageIds", new BooleanType(this.showMessageIds));
+	addExtension(ext, "showTerminologyRouting", new BooleanType(this.showTerminologyRouting));
+	addExtension(ext, "clearTxCache", new BooleanType(this.clearTxCache));
 	addExtension(ext, "httpReadOnly", new BooleanType(this.httpReadOnly));
+	addExtension(ext, "autoInstallMissingIgs", new BooleanType(this.autoInstallMissingIgs));
 	addExtension(ext, "allowExampleUrls", new BooleanType(this.allowExampleUrls));
 	addExtension(ext, "txServer", new UriType(this.txServer));
 	addExtension(ext, "txServerCache", new BooleanType(this.txServerCache));
@@ -781,6 +849,7 @@ public class CliContext {
 	addExtension(ext, "snomedCT", new StringType(this.snomedCT));
 	addExtension(ext, "fhirVersion", new StringType(this.fhirVersion));
 	addExtension(ext, "xVersion", new BooleanType(this.xVersion));
+	addExtension(ext, "devMode", new BooleanType(this.devMode));
 	addExtension(ext, "onlyOneEngine", new BooleanType(this.onlyOneEngine));
 	addExtension(ext, "ig", new StringType(this.ig));
 	// addExtension(ext, "questionnaireMode", new BooleanType(this.questionnaireMode));

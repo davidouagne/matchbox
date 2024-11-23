@@ -142,9 +142,10 @@ public class MatchboxEngine extends ValidationEngine {
       FHIRPathEngine fhirPathEngine = new FHIRPathEngine(context);
       fhirPathEngine.setAllowDoubleQuotes(false);
       this.setFhirPathEngine(fhirPathEngine);
-  		// Create a new IgLoader, otherwise the context is desynchronized between the loader and the engine
   		try {
-  			this.setPcm(new FilesystemPackageCacheManager.Builder().build());
+  			this.setPcm(new FilesystemPackageCacheManager.Builder()
+								.withCacheFolder(this.getPcm().getFolder())
+								.build());
   		} catch (final IOException e) {
   			throw new MatchboxEngineCreationException(e);
   		}
@@ -153,14 +154,16 @@ public class MatchboxEngine extends ValidationEngine {
 	public MatchboxEngine(final @NonNull ValidationEngine other) throws FHIRException, IOException {
 		super(other);
 		if (other instanceof MatchboxEngine) {
-				MatchboxEngine otherMatchboxEgine = (MatchboxEngine) other;
-				this.sessionCache = otherMatchboxEgine.sessionCache;
-				this.suppressedWarnInfoPatterns = otherMatchboxEgine.suppressedWarnInfoPatterns;
+				MatchboxEngine otherMatchboxEngine = (MatchboxEngine) other;
+				this.sessionCache = otherMatchboxEngine.sessionCache;
+				this.suppressedWarnInfoPatterns = otherMatchboxEngine.suppressedWarnInfoPatterns;
 		}
 		// Create a new IgLoader, otherwise the context is desynchronized between the loader and the engine
 		this.setIgLoader(new IgLoader(this.getPcm(), this.getContext(), this.getVersion(), this.isDebug()));
 		try {
-			this.setPcm(new FilesystemPackageCacheManager.Builder().build());
+			this.setPcm(new FilesystemPackageCacheManager.Builder()
+								.withCacheFolder(this.getPcm().getFolder())
+								.build());
 		} catch (final IOException e) {
 			throw new MatchboxEngineCreationException(e);
 		}
@@ -547,7 +550,10 @@ public class MatchboxEngine extends ValidationEngine {
 	 * Adapted transform operation from Validation Engine to use patched
 	 * MatchboxStructureMapUtilities
 	 */
-	public org.hl7.fhir.r5.elementmodel.Element transform(ByteProvider source, FhirFormat cntType, String mapUri, SimpleWorkerContext targetContext)
+	public org.hl7.fhir.r5.elementmodel.Element transform(final ByteProvider source,
+																			final FhirFormat cntType,
+																			final String mapUri,
+																			final SimpleWorkerContext targetContext)
 			throws FHIRException, IOException {
 		SimpleWorkerContext context = this.getContext();
 
@@ -911,7 +917,16 @@ public class MatchboxEngine extends ValidationEngine {
 	 * @throws FHIRException FHIR Exception
 	 */
 	public org.hl7.fhir.r5.model.StructureMap parseMapR5(String content) throws FHIRException {
-		SimpleWorkerContext context = this.getContext();
+		SimpleWorkerContext context = null;
+		try {
+				context = this.getContextForFhirVersion("5.0.0");
+		} catch (FHIRException e) {
+				log.error("error creating context",e);
+				return null;
+		} catch (IOException e) {
+				log.error("error creating context",e);
+				return null;
+		}
 		List<Base> outputs = new ArrayList<>();
 		StructureMapUtilities scu = new MatchboxStructureMapUtilities(context,
 				new TransformSupportServices(context, outputs), this);

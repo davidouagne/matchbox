@@ -499,7 +499,7 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
             if (!oidCacheManual.containsKey(s)) {
               oidCacheManual.put(s, new HashSet<>());
             }
-            oidCacheManual.get(s).add(new OIDDefinition(r.fhirType(), s, url, ((CanonicalResource) r).getVersion(), null));
+            oidCacheManual.get(s).add(new OIDDefinition(r.fhirType(), s, url, ((CanonicalResource) r).getVersion(), null, null));
           }
         }
       }
@@ -1283,9 +1283,9 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
   }
   
   public ValidationResult validateCode(final ValidationOptions optionsArg, String path, final Coding code, final ValueSet vs, final ValidationContextCarrier ctxt) {
-
+  
     ValidationOptions options = optionsArg != null ? optionsArg : ValidationOptions.defaults();
-
+    
     if (code.hasSystem()) {
       codeSystemsUsed.add(code.getSystem());
     }
@@ -1310,6 +1310,9 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
       // ok, first we try to validate locally
       try {
         ValueSetValidator vsc = constructValueSetCheckerSimple(options, vs, ctxt);
+        if (vsc.getOpContext() != null) {
+          vsc.getOpContext().note("Validate "+code.toString()+" @ "+path+" against "+(vs == null ? "null" : vs.getVersionedUrl()));
+        }
         vsc.setUnknownSystems(unknownSystems);
         vsc.setThrowToServer(options.isUseServer() && terminologyClientManager.hasClient());
         if (!ValueSetUtilities.isServerSide(code.getSystem())) {
@@ -1478,15 +1481,15 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
   }
 
   protected ValueSetExpander constructValueSetExpanderSimple(ValidationOptions options) {
-    return new ValueSetExpander(this, new TerminologyOperationContext(this, options)).setDebug(logger.isDebugLogging());
+    return new ValueSetExpander(this, new TerminologyOperationContext(this, options, "expansion")).setDebug(logger.isDebugLogging());
   }
 
   protected ValueSetValidator constructValueSetCheckerSimple(ValidationOptions options,  ValueSet vs,  ValidationContextCarrier ctxt) {
-    return new ValueSetValidator(this, new TerminologyOperationContext(this, options), options, vs, ctxt, expParameters, terminologyClientManager);
+    return new ValueSetValidator(this, new TerminologyOperationContext(this, options, "validation"), options, vs, ctxt, expParameters, terminologyClientManager);
   }
 
   protected ValueSetValidator constructValueSetCheckerSimple( ValidationOptions options,  ValueSet vs) {
-    return new ValueSetValidator(this, new TerminologyOperationContext(this, options), options, vs, expParameters, terminologyClientManager);
+    return new ValueSetValidator(this, new TerminologyOperationContext(this, options, "validation"), options, vs, expParameters, terminologyClientManager);
   }
 
   protected Parameters constructParameters(TerminologyClientContext tcd, ValueSet vs, boolean hierarchical) {
@@ -1650,7 +1653,11 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
       Parameters pIn = constructParameters(options, code);
       res = validateOnServer(tc, vs, pIn, options);
     } catch (Exception e) {
-      res = new ValidationResult(IssueSeverity.ERROR, e.getMessage() == null ? e.getClass().getName() : e.getMessage(), null).setTxLink(txLog == null ? null : txLog.getLastId());
+      issues.clear();
+      OperationOutcomeIssueComponent iss = new OperationOutcomeIssueComponent(org.hl7.fhir.r5.model.OperationOutcome.IssueSeverity.ERROR, org.hl7.fhir.r5.model.OperationOutcome.IssueType.EXCEPTION);
+      iss.getDetails().setText(e.getMessage());
+      issues.add(iss);
+      res = new ValidationResult(IssueSeverity.ERROR, e.getMessage() == null ? e.getClass().getName() : e.getMessage(), issues).setTxLink(txLog == null ? null : txLog.getLastId()).setErrorClass(TerminologyServiceErrorClass.SERVER_ERROR);
     }
     if (cachingAllowed) {
       txCache.cacheValidation(cacheToken, res, TerminologyCache.PERMANENT);
@@ -1764,6 +1771,10 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
       } else if (options.getVsAsUrl()){
         pin.addParameter().setName("url").setValue(new UriType(vs.getUrl()));
       } else {
+        if (vs.hasCompose() && vs.hasExpansion()) {
+          vs = vs.copy();
+          vs.setExpansion(null);
+        }
         pin.addParameter().setName("valueSet").setResource(vs);
         if (vs.getUrl() != null) {
           terminologyClientContext.getCached().add(vs.getUrl()+"|"+ vs.getVersion());
@@ -1786,6 +1797,7 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
     if (options.isDisplayWarningMode()) {
       pin.addParameter("mode","lenient-display-validation");
     }
+    pin.addParameter("diagnostics", true);
   }
 
   private boolean addDependentResources(TerminologyClientContext tc, Parameters pin, ValueSet vs) {
@@ -2192,11 +2204,9 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
         if (transforms.has(uri)) {
           return (T) transforms.get(uri, version, pvlist);
         } 
-  			// matchbox patch for duplicate resources, see https://github.com/ahdis/matchbox/issues/227
         if (actors.has(uri)) {
           return (T) actors.get(uri, version, pvlist);
         } 
-  			// matchbox patch for duplicate resources, see https://github.com/ahdis/matchbox/issues/227
         if (requirements.has(uri)) {
           return (T) requirements.get(uri, version, pvlist);
         } 
@@ -2457,21 +2467,17 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
         return (T) valueSets.get(uri, version);
       } else if ("CodeSystem".equals(cls)) {
         return (T) codeSystems.get(uri, version);
-      } 
-			// matchbox patch for duplicate resources, see https://github.com/ahdis/matchbox/issues/227
-      else if ("NamingSystem".equals(cls)) {
+      } else if ("NamingSystem".equals(cls)) {
         return (T) systems.get(uri, version);
-      }else if ("ConceptMap".equals(cls)) {
+      } else if ("ConceptMap".equals(cls)) {
         return (T) maps.get(uri, version);
       } else if ("PlanDefinition".equals(cls)) {
         return (T) plans.get(uri, version);
       } else if ("OperationDefinition".equals(cls)) {
         OperationDefinition od = operations.get(uri, version);
         return (T) od;
-  			// matchbox patch for duplicate resources, see https://github.com/ahdis/matchbox/issues/227
       } else if ("Questionnaire".equals(cls)) {
         return (T) questionnaires.get(uri, version);
-  			// matchbox patch for duplicate resources, see https://github.com/ahdis/matchbox/issues/227
       } else if ("SearchParameter".equals(cls)) {
         SearchParameter res = searchParameters.get(uri, version);
         return (T) res;
@@ -3199,7 +3205,8 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
                 String rt = rs.getString(1);
                 String url = rs.getString(2);
                 String version = rs.getString(3);
-                summary.addOID(new OIDDefinition(rt, oid, url, version, os.pid));
+                String status = rs.getString(4);
+                summary.addOID(new OIDDefinition(rt, oid, url, version, os.pid, status));
               }
             }
           } catch (Exception e) {
@@ -3211,13 +3218,13 @@ public abstract class BaseWorkerContext extends I18nBase implements IWorkerConte
   
       switch (oid) {
       case "2.16.840.1.113883.6.1" :
-        summary.addOID(new OIDDefinition("CodeSystem", "2.16.840.1.113883.6.1", "http://loinc.org", null, null));
+        summary.addOID(new OIDDefinition("CodeSystem", "2.16.840.1.113883.6.1", "http://loinc.org", null, null, null));
         break;
       case "2.16.840.1.113883.6.8" :
-        summary.addOID(new OIDDefinition("CodeSystem", "2.16.840.1.113883.6.8", "http://unitsofmeasure.org", null, null));
+        summary.addOID(new OIDDefinition("CodeSystem", "2.16.840.1.113883.6.8", "http://unitsofmeasure.org", null, null, null));
         break;
       case "2.16.840.1.113883.6.96" :
-        summary.addOID(new OIDDefinition("CodeSystem", "2.16.840.1.113883.6.96", "http://snomed.info/sct", null, null));
+        summary.addOID(new OIDDefinition("CodeSystem", "2.16.840.1.113883.6.96", "http://snomed.info/sct", null, null, null));
         break;
       default:
       }

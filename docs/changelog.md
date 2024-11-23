@@ -1,3 +1,36 @@
+Unreleased
+
+- Allow providing map and models in the StructureMap $transform operation [#305](https://github.com/ahdis/matchbox/issues/305)
+- Introduce parameter 'autoInstallMissingIgs' to automatically install IGs from the public registry
+  [#306](https://github.com/ahdis/matchbox/issues/306)
+- Introduce the configuration parameter 'devMode' to enable the development environment; it allows installing an 
+  ImplementationGuide by posting its NPM package to the operation _$install-npm-package_
+  [#306](https://github.com/ahdis/matchbox/issues/306)
+
+2024/11/13 Release 3.9.7
+
+- Upgrade hapifhir org.hl7.fhir.core to 6.4.1
+
+2024/10/24 Release 3.9.6
+
+- Remove lucene dependencies [#301](https://github.com/ahdis/matchbox/issues/301)
+
+2024/10/24 Release 3.9.5
+
+- Updated dependencies [#301](https://github.com/ahdis/matchbox/issues/301)
+
+2024/10/17 Release 3.9.4
+
+- Validation: Tutorial for validating FHIR resources with [matchbox](https://ahdis.github.io/matchbox/validation-tutorial/)
+- Validation: add button to copy a direct link to the validation [#296](https://github.com/ahdis/matchbox/issues/296)
+- Validation: support additional validation parameters [#299](https://github.com/ahdis/matchbox/issues/299)
+- Validation: Allow validating a resource through the GUI with URL search parameters [#288](https://github.com/ahdis/matchbox/issues/288)
+- Validation: Terminology: support CodeableConcept in ValueSet/$validate operation [#291](https://github.com/ahdis/matchbox/issues/291)
+- FML: Use FMLParser in StructureMapUtilities and support for identity transform [#289](https://github.com/ahdis/matchbox/issues/289)
+- FML: FML transform performance tuning #264 (via @mrunibe)
+- Gazelle reports: add test to ensure https://gazelle.ihe.net/jira/browse/EHS-831 is fixed
+- Upgrade hapifhir org.hl7.fhir.core to 6.3.32
+
 2024/10/07 Release 3.9.3
 
 - Gazelle reports: add an information message if there are no other messages [#274](https://github.com/ahdis/matchbox/issues/274)

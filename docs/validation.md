@@ -1,7 +1,9 @@
 # Validation of FHIR resources
 
-matchbox can validate FHIR resources if they are conform to the FHIR R4 specification
+matchbox can validate FHIR resources if they are conform to the FHIR R4/R4B or R5 specification
 and conform to the requirements of specific implementation guides.
+
+a tutorial how to validate FHIR resources and to what error message you have to look out for is availabe [here](validation-tutorial.md).
 
 Validation is based on the official [HL7 Java reference validator](https://confluence.hl7.org/display/FHIR/Using+the+FHIR+Validator) in accordance with the provided terminologies. An external terminology server can also be configured, and you can validate your implementation through the $validate operation with the FHIR API or through a simple GUI.
 
@@ -64,20 +66,25 @@ matchbox:
       #      onlyOneEngine: true
       #      xVersion : false
       #      igsPreloaded: ch.fhir.ig.ch-core#4.0.0-ballot
+      #      autoInstallMissingIgs: true
       suppressWarnInfo:
         hl7.fhir.r4.core#4.0.1:
         #- "Constraint failed: dom-6:"
 ```
 
-| Parameter            | Card  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-|----------------------|-------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| implementationguides | 0..\* | the Implementation Guide and version which with which matchbox will be configured, you can provide by classpath, file, http address, if none is specified the FHIR package servers will be used (need to be online)                                                                                                                                                                                                                                                               |
-| txServer             | 0..1  | txServer to use, n/a if none (default), http://localhost:8080/fhir for internal (if server.port in application.yaml is 8080), http://tx.fhir.org for hl7 validator  |
-| igsPreloaded         | 0..\* | For each mentioned ImplementationGuide (comma separated) an engine will be created, which will be cached in memory as long the application is running. Other IG's will created on demand and will be cached for an hour for subsequent calls. Tradeoff between memory consumption and first response time (creating of engine might have duration of half a minute). Default no igs are preloaded.                                                                                |
-| onlyOneEngine        | 0..1  | Implementation Guides can have multiple versions with different dependencies. Matchbox creates for transformation and validation an own engine for each Implementation Guide and its dependencies (default setting). You can switch this behavior, e.g. if you are using it in development and want to create and update resources or transform maps. Set the setting for onlyOneEngine to true. The changes are however not persisted and will be lost if matchbox is restarted. |
-| httpReadOnly         | 0..1  | Whether to allow creating, modifying or deleting resources on the server via the HTTP API or not. If `true`, IGs can only be loaded through the configuration.                                                                                                                                                                                                                                                                                                                    |
-| suppressWarnInfo     | 0..\* | A list of warning message to ignore while validating resources, per Implementation Guide and version.  |
-| extensions     | 0..1 | Extensions not defined by the ImplementationgGuides which are accepted, comma separted list by url patterns, defaults to 'any' |
+| Parameter             | Card  | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+|-----------------------|-------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| implementationguides  | 0..\* | the Implementation Guide and version which with which matchbox will be configured, you can provide by classpath, file, http address, if none is specified the FHIR package servers will be used (need to be online)                                                                                                                                                                                                                                                               |
+| txServer              | 0..1  | txServer to use, n/a if none (default), http://localhost:8080/fhir for internal (if server.port in application.yaml is 8080), http://tx.fhir.org for hl7 validator                                                                                                                                                                                                                                                                                                                |
+| txUseEcosystem        | 0..1  | boolean true if none (default), if true asks tx servers for which CodeSystem they are authorative                                                                                                                                                                                                                                                                                                                                                                                 |
+| txServerCache         | 0..1  | boolean if respones are cached, true  if none (default)                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| txLog                 | 0..1  | string indicating file location of log (end either in .txt or .html, default no logging                                                                                                                                                                                                                                                                                                                                                                                           |
+| igsPreloaded          | 0..\* | For each mentioned ImplementationGuide (comma separated) an engine will be created, which will be cached in memory as long the application is running. Other IG's will created on demand and will be cached for an hour for subsequent calls. Tradeoff between memory consumption and first response time (creating of engine might have duration of half a minute). Default no igs are preloaded.                                                                                |
+| onlyOneEngine         | 0..1  | Implementation Guides can have multiple versions with different dependencies. Matchbox creates for transformation and validation an own engine for each Implementation Guide and its dependencies (default setting). You can switch this behavior, e.g. if you are using it in development and want to create and update resources or transform maps. Set the setting for onlyOneEngine to true. The changes are however not persisted and will be lost if matchbox is restarted. |
+| httpReadOnly          | 0..1  | Whether to allow creating, modifying or deleting resources on the server via the HTTP API or not. If `true`, IGs can only be loaded through the configuration.                                                                                                                                                                                                                                                                                                                    |
+| suppressWarnInfo      | 0..\* | A list of warning message to ignore while validating resources, per Implementation Guide and version.                                                                                                                                                                                                                                                                                                                                                                             |
+| extensions            | 0..1  | Extensions not defined by the ImplementationgGuides which are accepted, comma separted list by url patterns, defaults to 'any'                                                                                                                                                                                                                                                                                                                                                    |
+| autoInstallMissingIgs | 0..1  | Whether to automatically install IGs from the public registry if they are not installed. Default to `false`.                                                                                                                                                                                                                                                                                                                                                                      |
 
 #### Suppress warning/information-level issues in validation
 
@@ -159,3 +166,21 @@ Its use case is simple:
 Please be aware that if you have unbound code/coding/codeableConcepts, or the binding is not 'required', the 
 code/coding/codeableConcept will be considered valid if the code system is not defined locally (e.g. SNOMED CT, 
 LOINC, etc).
+
+### GUI
+
+You can run a validation through the GUI by using search parameters in the URL.
+
+| Parameter        | Description                                    |
+|------------------|------------------------------------------------|
+| `resource`       | The resource to validate, encoded as base64url |
+| `profile`        | The profile to use for validation              |
+| Other parameters | Any parameter supported by the FHIR API        |
+
+The only required parameter is `resource`.
+If `profile` is not provided, it will default to `http://hl7.org/fhir/StructureDefinition/{resourceType}`.
+
+E.g.
+```http
+GET https://test.ahdis.ch/matchboxv3/?profile=http%3A%2F%2Fhl7.org%2Ffhir%2FStructureDefinition%2FBundle&txServer=http://tx.fhir.org/r4&resource=PFBhdGllbnQgeG1sbnM9Imh0dHA6Ly9obDcub3JnL2ZoaXIiPgogIDxuYW1lPgogICAgPGZhbWlseSB2YWx1ZT0iVGVzdCIvPgogIDwvbmFtZT4KPC9QYXRpZW50Pg#/validate HTTP/1
+```

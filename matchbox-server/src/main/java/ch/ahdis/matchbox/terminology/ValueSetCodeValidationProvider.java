@@ -16,6 +16,7 @@ import org.hl7.fhir.instance.model.api.IAnyResource;
 import org.hl7.fhir.instance.model.api.IBaseParameters;
 import org.hl7.fhir.instance.model.api.IBaseResource;
 import org.hl7.fhir.instance.model.api.IDomainResource;
+import org.hl7.fhir.r5.model.CodeableConcept;
 import org.hl7.fhir.r5.model.Coding;
 import org.hl7.fhir.r5.model.Parameters;
 import org.hl7.fhir.r5.model.ValueSet;
@@ -23,7 +24,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import jakarta.servlet.http.HttpServletResponse;
+
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
@@ -91,133 +94,174 @@ public class ValueSetCodeValidationProvider implements IResourceProvider {
 			? request.getParameterValue("cache-id").toString()
 			: null;
 
-		final boolean inferSystem = request.hasParameter("inferSystem")
-			? request.getParameterBool("inferSystem")
-			: false;
+		final boolean inferSystem = request.hasParameter("inferSystem") && request.getParameterBool("inferSystem");
 
 		final String code = request.hasParameter("code")
 			? request.getParameterValue("code").toString()	: null;
 
-		final boolean lenientDisplayValidation = request.hasParameter("lenient-display-validation")
-			? request.getParameterBool("lenient-display-validation")
-			: false;
-
-		final String mode = request.hasParameter("mode")
-			? request.getParameterValue("mode").toString()	: null;
-
-		// parameter default-to-lastest-version (Booelan)
-		// parameter profile-url "http://hl7.org/fhir/ExpansionProfile/dc8fd4bc-091a-424a-8a3b-6198ef146891"
-
-		if (code!=null) {
+		if (code != null) {
 			return mapCodeToSuccessfulParameters(code);
 		}
 
-		if (!request.hasParameter("coding")) {
+		//final boolean lenientDisplayValidation = request.hasParameter("lenient-display-validation")
+		//	&& request.getParameterBool("lenient-display-validation");
+
+		//final String mode = request.hasParameter("mode")
+		//	? request.getParameterValue("mode").toString()	: null;
+
+		// parameter default-to-lastest-version (Boolean)
+		// parameter profile-url "http://hl7.org/fhir/ExpansionProfile/dc8fd4bc-091a-424a-8a3b-6198ef146891"
+
+		if (!request.hasParameter("coding") && !request.hasParameter("codeableConcept")) {
 			servletResponse.setStatus(422);
-			return mapErrorToOperationOutcome("Missing parameter 'coding' in the request");
+			return mapErrorToOperationOutcome("Missing parameter 'coding' or 'codeableConcept' in the request");
 		}
-		if (request.getParameterValue("coding") instanceof final Coding coding) {
-			if ("NO_MEMBERSHIP_CHECK".equals(valueSetMode)) {
-				return mapCodingToSuccessfulParameters(coding);
-			}
 
-			String url = null;
-			ValueSet valueSet = null;
-			boolean cachedValueSet = false;
-			if (request.hasParameter("url")) {
-				url = request.getParameterValue("url").toString();
-				valueSet = this.getExpandedValueSet(cacheId, url);
-				cachedValueSet = true;
-			} else if (request.hasParameter("valueSet")) {
-				valueSet = (ValueSet) request.getParameter("valueSet").getResource();
-				url = valueSet.getUrl();
-			}
+		if (!(request.getParameterValue("coding") instanceof Coding)
+			&& !(request.getParameterValue("codeableConcept") instanceof CodeableConcept)) {
+			servletResponse.setStatus(422);
+			// The original error message is:
+			//    Unable to find code to validate (looked for coding | codeableConcept | code)
+			return mapErrorToOperationOutcome("Unable to find code to validate (looked for 'coding' and 'codeableConcept')");
+		}
 
-			if (valueSet == null) {
-				// That value set is not cached
-				log.debug("OK - cache miss, value set is null");
-				return mapCodingToSuccessfulParameters(coding);
-			}
-			log.debug("Validating code in VS: {}|{} in {}", coding.getCode(), coding.getSystem(), url);
+		final Coding coding;
+		if (request.hasParameter("coding")) {
+			coding = (Coding) request.getParameterValue("coding");
+		} else {
+			coding = null;
+		}
+		final CodeableConcept codeableConcept;
+		if (request.hasParameter("codeableConcept")) {
+			codeableConcept = (CodeableConcept) request.getParameterValue("codeableConcept");
+		} else {
+			codeableConcept = null;
+		}
 
-			if (inferSystem && !coding.hasSystem()) {
-				// Infer the coding system as the first included system in the composition
-				coding.setSystem(valueSet.getCompose().getIncludeFirstRep().getSystem());
-			}
+		final List<Coding> codings;
+		if (coding != null) {
+			codings = List.of(coding);
+		} else {
+			codings = codeableConcept.getCoding();
+		}
 
-			if (!cachedValueSet) {
-				// We have to expand the value set
-				final IValidationSupport.ValueSetExpansionOutcome result = this.inMemoryTerminologySupport.expandValueSet(
-					this.validationSupportContext,
-					this.expansionOptions,
-					valueSet);
-				if (result == null || result.getValueSet() == null) {
-					// We have failed expanding the value set, this means it may be a complex one
-					log.debug("OK - expansion failed");
-					final var membership = this.evaluateCodeInComposition(coding, valueSet.getCompose());
+		if ("NO_MEMBERSHIP_CHECK".equals(valueSetMode)) {
+			return createSuccessfulResponseParameters(codings.getFirst());
+		}
+
+		String url = null;
+		ValueSet valueSet = null;
+		boolean cachedValueSet = false;
+		if (request.hasParameter("url")) {
+			url = request.getParameterValue("url").toString();
+			valueSet = this.getExpandedValueSet(cacheId, url);
+			cachedValueSet = true;
+		} else if (request.hasParameter("valueSet")) {
+			valueSet = (ValueSet) request.getParameter("valueSet").getResource();
+			url = valueSet.getUrl();
+		}
+
+		if (valueSet == null) {
+			// That value set is not cached
+			log.debug("OK - cache miss, value set is null");
+			return createSuccessfulResponseParameters(codings.getFirst());
+		}
+		if (coding != null) {
+			log.debug("Validating code '{}|{}' in ValueSet '{}'", coding.getCode(), coding.getSystem(), url);
+		} else {
+			log.debug("Validating codeableConcept '{}' in ValueSet '{}'", codeableConcept, url);
+		}
+
+		if (!cachedValueSet) {
+			// We have to expand the value set
+			final IValidationSupport.ValueSetExpansionOutcome result = this.inMemoryTerminologySupport.expandValueSet(
+				this.validationSupportContext,
+				this.expansionOptions,
+				valueSet);
+			if (result == null || result.getValueSet() == null) {
+				// The value set expansion has failed; this means it may be too complex for the current implementation
+				// We try to infer the code membership from the value set definition as a last resort
+				log.debug(" - expansion failed");
+
+				for (final var validatedCoding : codings) {
+					final var membership = this.evaluateCodeInComposition(validatedCoding, valueSet.getCompose());
 					if (membership == CodeMembership.EXCLUDED) {
-						log.debug("OK - code is excluded from value set composition");
-						return mapCodeErrorToParameters(
-							"The code '%s' is excluded from the value set '%s' composition".formatted(
-								coding.getCode(),
-								url
-							),
-							coding
-						);
+						log.debug(" - code '{}' is excluded from value set composition", validatedCoding.getCode());
 					} else if (membership == CodeMembership.INCLUDED) {
-						log.debug("OK - code is included in value set composition");
+						log.debug(" - code '{}' is included in value set composition", validatedCoding.getCode());
+						// We can stop here, we've found a Coding explicitly included
+						return createSuccessfulResponseParameters(validatedCoding);
 					} else {
-						log.debug("OK - code is not included/excluded from value set composition, inferring inclusion");
+						log.debug(" - code '{}' is not included/excluded from value set composition", validatedCoding.getCode());
+						// We can stop here, we've found a Coding explicitly included
+						return createSuccessfulResponseParameters(validatedCoding);
 					}
-					return mapCodingToSuccessfulParameters(coding);
 				}
-
-				// Value set is expanded
-				final var baseValueSet = (IDomainResource) result.getValueSet();
-				if (baseValueSet instanceof final ValueSet valueSetR5) {
-					valueSet = valueSetR5;
-				} else if (baseValueSet instanceof final org.hl7.fhir.r4.model.ValueSet valueSetR4) {
-					valueSet = (ValueSet) VersionConvertorFactory_40_50.convertResource(valueSetR4);
-				} else if (baseValueSet instanceof final org.hl7.fhir.r4b.model.ValueSet valueSetR4B) {
-					valueSet = (ValueSet) VersionConvertorFactory_43_50.convertResource(valueSetR4B);
-				} else {
-					throw new MatchboxUnsupportedFhirVersionException("ValueSetCodeValidationProvider",
-																					  this.fhirContext.getVersion().getVersion());
-				}
-
-				if (valueSet.getExpansion().getContains().isEmpty()) {
-					// The value set is empty
-					log.debug("OK - expansion failed without reporting errors (empty value set)");
-					return mapCodingToSuccessfulParameters(coding);
-				}
-
-				if (cacheId != null) {
-					this.cacheExpandedValueSet(cacheId, url, valueSet);
-				}
+				return createErrorResponseParameters(
+					"The provided Coding/CodeableConcept is excluded from the value set '%s' composition".formatted(url),
+					coding,
+					codeableConcept
+				);
 			}
 
-			// Now we have an expanded value set, we can properly validate the code
-			if (this.validateCodeInExpandedValueSet(coding, valueSet)) {
-				log.debug("OK - present in expanded value set (expansion contains {} codes)",
-							 valueSet.getExpansion().getContains().size());
-				return mapCodingToSuccessfulParameters(coding);
+			// Value set is expanded, convert it to R5 for internal use
+			final var baseValueSet = (IDomainResource) result.getValueSet();
+			if (baseValueSet instanceof final ValueSet valueSetR5) {
+				valueSet = valueSetR5;
+			} else if (baseValueSet instanceof final org.hl7.fhir.r4.model.ValueSet valueSetR4) {
+				valueSet = (ValueSet) VersionConvertorFactory_40_50.convertResource(valueSetR4);
+			} else if (baseValueSet instanceof final org.hl7.fhir.r4b.model.ValueSet valueSetR4B) {
+				valueSet = (ValueSet) VersionConvertorFactory_43_50.convertResource(valueSetR4B);
+			} else {
+				throw new MatchboxUnsupportedFhirVersionException("ValueSetCodeValidationProvider",
+																				  this.fhirContext.getVersion().getVersion());
 			}
-			log.debug("FAIL - not present in expanded value set (expansion contains {} codes)",
-						 valueSet.getExpansion().getContains().size());
-			return mapCodeErrorToParameters(
-				"The code '%s' is not in the value set '%s' (expansion contains %d codes)".formatted(
-					coding.getCode(),
-					url,
-					valueSet.getExpansion().getContains().size()
-				),
-				coding
-			);
+
+			if (valueSet.getExpansion().getContains().isEmpty()) {
+				// The value set expansion is successful but empty
+				log.debug("OK - expansion failed without reporting errors (empty value set)");
+				return createSuccessfulResponseParameters(codings.getFirst());
+			}
+
+			if (cacheId != null) {
+				this.cacheExpandedValueSet(cacheId, url, valueSet);
+			}
 		}
 
-		servletResponse.setStatus(422);
-		// Original error message is:
-		// Unable to find code to validate (looked for coding | codeableConcept | code)
-		return mapErrorToOperationOutcome("Unable to find code to validate (looked for coding)");
+		for (final var validatedCoding : codings) {
+			if (this.evaluateCodingInExpandedValueSet(validatedCoding, valueSet, inferSystem)) {
+				return createSuccessfulResponseParameters(validatedCoding);
+			}
+		}
+		return createErrorResponseParameters(
+			"The provided Coding/CodeableConcept is not in the value set '%s' (expansion contains %d codes)".formatted(
+				url,
+				valueSet.getExpansion().getContains().size()
+			),
+			coding,
+			codeableConcept
+		);
+	}
+
+	/**
+	 * Try to infer from an expanded value set if a coding is included or excluded.
+	 */
+	private boolean evaluateCodingInExpandedValueSet(final Coding coding,
+												                final ValueSet valueSet,
+												                final boolean inferSystem) {
+		if (inferSystem && !coding.hasSystem()) {
+			// Infer the coding system as the first included system in the composition
+			coding.setSystem(valueSet.getCompose().getIncludeFirstRep().getSystem());
+		}
+
+		if (this.validateCodeInExpandedValueSet(coding, valueSet)) {
+			log.debug("OK - present in expanded value set (expansion contains {} codes)",
+						 valueSet.getExpansion().getContains().size());
+			return true;
+		}
+		log.debug("FAIL - not present in expanded value set (expansion contains {} codes)",
+					 valueSet.getExpansion().getContains().size());
+		return false;
 	}
 
 	/**
