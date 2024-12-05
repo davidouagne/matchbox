@@ -1,4 +1,4 @@
-Unreleased
+2024/11/25 Release 3.9.8
 
 - Allow providing map and models in the StructureMap $transform operation [#305](https://github.com/ahdis/matchbox/issues/305)
 - Introduce parameter 'autoInstallMissingIgs' to automatically install IGs from the public registry
@@ -6,6 +6,10 @@ Unreleased
 - Introduce the configuration parameter 'devMode' to enable the development environment; it allows installing an 
   ImplementationGuide by posting its NPM package to the operation _$install-npm-package_
   [#306](https://github.com/ahdis/matchbox/issues/306)
+- Add filtering to the list of StructureMaps in the GUI
+- Move from the hash-based Angular routing to the path-based routing
+- Upgrade hapifhir org.hl7.fhir.core to 6.4.2
+- Upgrade hl7.terminology to 6.1.0 [#313](https://github.com/ahdis/matchbox/issues/313)
 
 2024/11/13 Release 3.9.7
 

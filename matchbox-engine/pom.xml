@@ -6,7 +6,7 @@
     <parent>
         <artifactId>matchbox</artifactId>
         <groupId>health.matchbox</groupId>
-        <version>3.9.7</version>
+        <version>3.9.8</version>
     </parent>
 
     <artifactId>matchbox-engine</artifactId>
@@ -19,11 +19,11 @@
     <dependencies>
         <dependency>
             <groupId>ca.uhn.hapi.fhir</groupId>
-            <artifactId>org.hl7.fhir.r4</artifactId>
+            <artifactId>org.hl7.fhir.r5</artifactId>
         </dependency>
         <dependency>
             <groupId>ca.uhn.hapi.fhir</groupId>
-            <artifactId>org.hl7.fhir.r5</artifactId>
+            <artifactId>org.hl7.fhir.r4</artifactId>
         </dependency>
         <dependency>
             <groupId>ca.uhn.hapi.fhir</groupId>

@@ -1,5 +1,7 @@
 package ca.uhn.fhir.jpa.starter.common;
 
+import ca.uhn.fhir.jpa.dao.data.INpmPackageVersionResourceDao;
+import ch.ahdis.matchbox.mappinglanguage.StructureMapListProvider;
 import ch.ahdis.matchbox.providers.CodeSystemResourceProvider;
 import ch.ahdis.matchbox.providers.ConceptMapResourceProvider;
 import ch.ahdis.matchbox.packages.ImplementationGuideProviderR4B;
@@ -28,6 +30,7 @@ import ch.ahdis.matchbox.mappinglanguage.StructureMapTransformProvider;
 import ch.ahdis.matchbox.questionnaire.QuestionnaireAssembleProviderR4B;
 import ch.ahdis.matchbox.questionnaire.QuestionnaireResponseExtractProviderR4B;
 import ch.ahdis.matchbox.util.MatchboxPackageInstallerImpl;
+import org.springframework.transaction.PlatformTransactionManager;
 
 @Configuration
 @Conditional(OnR4BCondition.class)
@@ -136,6 +139,14 @@ public class FhirServerConfigR4B {
 //    retVal.setDao(daoStructureMapR4());
     return retVal;
   }
+
+  @Bean
+  public StructureMapListProvider structureMapListProvider(final INpmPackageVersionResourceDao npmPackageVersionResourceDao,
+                                                           final PlatformTransactionManager myTxManager,
+                                                           final FhirContext fhirContext) {
+    return new StructureMapListProvider(npmPackageVersionResourceDao, myTxManager, fhirContext);
+  }
+
 
   @Bean
   public ValidatorResourceFetcher jpaValidatorResourceFetcher() {

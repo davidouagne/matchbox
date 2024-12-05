@@ -67,6 +67,8 @@ public class StructureMapTransformProvider extends StructureMapResourceProvider 
 	@Autowired
 	protected MatchboxEngineSupport matchboxEngineSupport;
 
+	private final FhirContext fhirR5Context = FhirContext.forR5Cached();
+
 	@Override
 	public MethodOutcome create(final HttpServletRequest theRequest,
 										 @ResourceParam final IBaseResource theResource,
@@ -146,16 +148,23 @@ public class StructureMapTransformProvider extends StructureMapResourceProvider 
 					throw new InvalidRequestException("The parameter 'map' must be a StructureMap resource");
 				}
 			}
+
+			if (inputParameters.hasParameter("source")) {
+				source = inputParameters.getParameter("source").getValueStringType().getValueNotNull();
+			}
 		} else {
 			resource = body;
 		}
 
-		final Map<String, String[]> requestParams = theServletRequest.getParameterMap();
-		if (requestParams.containsKey("source") && requestParams.get("source").length > 0) {
-			if (requestParams.get("source").length > 1) {
-				throw new InvalidRequestException("Only one 'source' parameter is allowed");
+		if (source == null) {
+			// If the 'source' was not provided in the Parameters, check the URL query parameters
+			final Map<String, String[]> requestParams = theServletRequest.getParameterMap();
+			if (requestParams.containsKey("source") && requestParams.get("source").length > 0) {
+				if (requestParams.get("source").length > 1) {
+					throw new InvalidRequestException("Only one 'source' parameter is allowed");
+				}
+				source = requestParams.get("source")[0];
 			}
-			source = requestParams.get("source")[0];
 		}
 
 		if (source == null && map == null) {
@@ -228,18 +237,18 @@ public class StructureMapTransformProvider extends StructureMapResourceProvider 
 	private IBaseResource parseBaseResource(String content) {
 		content = content.trim();
 		if (content.startsWith("<")) {
-			return FhirContext.forR5().newXmlParser().parseResource(content);
+			return this.fhirR5Context.newXmlParser().parseResource(content);
 		} else {
-			return FhirContext.forR5().newJsonParser().parseResource(content);
+			return this.fhirR5Context.newJsonParser().parseResource(content);
 		}
 	}
 
 	private <T extends IBaseResource> T parseResource(String content, final Class<T> theResourceType) {
 		content = content.trim();
 		if (content.startsWith("<")) {
-			return FhirContext.forR5().newXmlParser().parseResource(theResourceType, content);
+			return this.fhirR5Context.newXmlParser().parseResource(theResourceType, content);
 		} else {
-			return FhirContext.forR5().newJsonParser().parseResource(theResourceType, content);
+			return this.fhirR5Context.newJsonParser().parseResource(theResourceType, content);
 		}
 	}
 

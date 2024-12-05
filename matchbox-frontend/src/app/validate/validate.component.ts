@@ -17,9 +17,10 @@ import {ValidationCodeEditor} from "./validation-code-editor";
 const INDENT_SPACES = 2;
 
 @Component({
-  selector: 'app-validate',
-  templateUrl: './validate.component.html',
-  styleUrls: ['./validate.component.scss'],
+    selector: 'app-validate',
+    templateUrl: './validate.component.html',
+    styleUrls: ['./validate.component.scss'],
+    standalone: false
 })
 export class ValidateComponent implements AfterViewInit {
   readonly AUTO_IG_SELECTION = 'AUTOMATIC';
@@ -513,7 +514,10 @@ export class ValidateComponent implements AfterViewInit {
    * @private
    */
   private analyzeUrlForValidation(): void {
-    const searchParams = new URLSearchParams(window.location.search);
+    if (!window.location.hash) {
+      return;
+    }
+    const searchParams = new URLSearchParams(window.location.hash.substring(1));
     if (searchParams.has('resource')) {
       let hasSetProfile = false;
       if (searchParams.has('profile')) {
@@ -523,7 +527,8 @@ export class ValidateComponent implements AfterViewInit {
           this.selectedProfile = profile;
           hasSetProfile = true;
         } else {
-          this.showErrorToast('Unknown profile', `The profile '${profile}' is unknown to this server`);
+          this.showErrorToast('Unknown profile', `The profile '${profile}' is unknown to this server. Please choose another profile from the list.`);
+          return;
         }
       }
 
@@ -544,6 +549,10 @@ export class ValidateComponent implements AfterViewInit {
       }
 
       this.validateResource(`provided.${extension}`, resource, contentType, !hasSetProfile);
+      this.toastr.info('Validation', 'The validation of your resource has started', {
+        closeButton: true,
+        timeOut: 3000,
+      });
     }
   }
 }
